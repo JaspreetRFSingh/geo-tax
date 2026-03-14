@@ -42,7 +42,7 @@ flowchart TD
     subgraph Data Models
         REQ["TaxCalculationRequest\nbaseFare · rideType\norigin/destination\njurisdictions · timestamp"]
         RULE["TaxRule (immutable)\nruleId · version\njurisdictionCode\ntaxType · rateeffectiveFrom/To\napplicableRideType"]
-        RES["TaxCalculationResult\n───────────────────\nlineItems[]\ntotalTaxAmount\nappliedRuleIds@version\nfromCache flag"]
+        RES["TaxCalculationResult\nlineItems[], totalTaxAmount\nappliedRuleIds@version, fromCache flag"]
     end
 
     Client -->|"TaxCalculationRequest"| SVC
