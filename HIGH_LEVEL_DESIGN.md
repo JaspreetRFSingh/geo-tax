@@ -20,29 +20,52 @@ flowchart TD
 
     subgraph Service Layer
         SVC["TaxCalculationService
-        Idempotency cache (transactionId → result) \n Metrics (LongAdder) \nBatch parallelStream()"]
+        Idempotency cache (transactionId → result)
+        Metrics (LongAdder)
+        Batch parallelStream()"]
     end
 
     subgraph Engine Layer
-        ENG["TaxCalculationEngine \nIdentifies jurisdictions, Parallel rule fetch, (CompletableFuture)\nRule filtering\nAudit trail builder"]
+        ENG["TaxCalculationEngine
+        Identifies jurisdictions, 
+        Parallel rule fetch,
+        (CompletableFuture)
+        Rule filtering
+        Audit trail builder"]
     end
 
     subgraph Resilience Layer
-        CB["CircuitBreaker\nCLOSED → OPEN → HALF_OPEN\n(lock-free Atomics)"]
-        RB["RetryWithBackoff\nExp. backoff + jitter (Max 3 attempts)"]
+        CB["CircuitBreaker
+        CLOSED → OPEN → HALF_OPEN
+        (lock-free Atomics)"]
+        RB["RetryWithBackoff
+        Exp. backoff + jitter (Max 3 attempts)"]
     end
 
     subgraph Provider Layer
-        IFACE["«interface»\nJurisdictionRuleProvider\n"]
-        INMEM["InMemoryRuleProvider\nIN-TS · IN-MH · IN-KA\nUS-CA (demo)"]
-        REDIS(["RedisRuleProvider\n(extension point)"])
-        DB(["DBRuleProvider\n(extension point)"])
+        IFACE["«interface»
+        JurisdictionRuleProvider"]
+        INMEM["InMemoryRuleProvider
+        IN-TS · IN-MH · IN-KA"]
+        REDIS(["RedisRuleProvider 
+        (extension point)"])
+        DB(["DBRuleProvider 
+        (extension point)"])
     end
 
     subgraph Data Models
-        REQ["TaxCalculationRequest\nbaseFare · rideType\norigin/destination\njurisdictions · timestamp"]
-        RULE["TaxRule (immutable)\nruleId · version\njurisdictionCode\ntaxType · rateeffectiveFrom/To\napplicableRideType"]
-        RES["TaxCalculationResult\nlineItems[], totalTaxAmount\nappliedRuleIds@version, fromCache flag"]
+        REQ["TaxCalculationRequest
+        baseFare · rideType
+        origin/destination
+        jurisdictions · timestamp"]
+        RULE["TaxRule (immutable)
+        ruleId · version
+        jurisdictionCode
+        taxType · rateeffectiveFrom/To
+        applicableRideType"]
+        RES["TaxCalculationResult
+        lineItems[], totalTaxAmount
+        appliedRuleIds@version, fromCache flag"]
     end
 
     Client -->|"TaxCalculationRequest"| SVC
