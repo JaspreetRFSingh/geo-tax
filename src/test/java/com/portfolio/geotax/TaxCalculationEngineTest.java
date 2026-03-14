@@ -5,7 +5,10 @@ import com.portfolio.geotax.model.*;
 import com.portfolio.geotax.model.TaxCalculationResult.TaxLineItem;
 import com.portfolio.geotax.provider.InMemoryJurisdictionRuleProvider;
 import com.portfolio.geotax.provider.JurisdictionRuleProvider;
-import com.portfolio.geotax.resilience.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import com.portfolio.geotax.service.TaxCalculationService;
 
 import org.junit.jupiter.api.*;
@@ -271,26 +274,27 @@ class TaxCalculationEngineTest {
     @Test
     @DisplayName("Circuit breaker should open after threshold failures and fast-fail")
     void circuit_breaker_should_open_after_failures() {
-        AtomicInteger callCount = new AtomicInteger(0);
-
-        // Mock clock to control time
-        Instant[] now = { Instant.now() };
-        Clock mockClock = Clock.fixed(now[0], ZoneOffset.UTC);
-
-        CircuitBreaker cb = new CircuitBreaker("test-cb", 3, Duration.ofSeconds(30), mockClock);
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+            .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+            .slidingWindowSize(3)
+            .minimumNumberOfCalls(3)
+            .failureRateThreshold(100f)
+            .waitDurationInOpenState(Duration.ofSeconds(30))
+            .build();
+        CircuitBreaker cb = CircuitBreakerRegistry.of(config).circuitBreaker("test-cb");
 
         // Cause 3 failures to open the circuit
         for (int i = 0; i < 3; i++) {
             assertThrows(RuntimeException.class, () ->
-                cb.execute(() -> { throw new RuntimeException("Simulated failure"); })
+                cb.executeSupplier(() -> { throw new RuntimeException("Simulated failure"); })
             );
         }
 
         assertEquals(CircuitBreaker.State.OPEN, cb.getState(), "Circuit should be OPEN");
 
-        // Next call should fast-fail with CircuitBreakerOpenException
-        assertThrows(CircuitBreaker.CircuitBreakerOpenException.class, () ->
-            cb.execute(() -> "should not reach here")
+        // Next call should fast-fail with CallNotPermittedException
+        assertThrows(CallNotPermittedException.class, () ->
+            cb.executeSupplier(() -> "should not reach here")
         );
     }
 

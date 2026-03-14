@@ -3,8 +3,13 @@ package com.portfolio.geotax.engine;
 import com.portfolio.geotax.model.*;
 import com.portfolio.geotax.model.TaxCalculationResult.TaxLineItem;
 import com.portfolio.geotax.provider.JurisdictionRuleProvider;
-import com.portfolio.geotax.resilience.CircuitBreaker;
-import com.portfolio.geotax.resilience.RetryWithBackoff;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -43,21 +48,33 @@ public class TaxCalculationEngine {
 
     private final JurisdictionRuleProvider ruleProvider;
     private final CircuitBreaker circuitBreaker;
-    private final RetryWithBackoff retry;
+    private final Retry retry;
     private final ExecutorService executorService;
 
     public TaxCalculationEngine(JurisdictionRuleProvider ruleProvider) {
         this.ruleProvider = ruleProvider;
-        this.circuitBreaker = new CircuitBreaker(
-            "jurisdiction-rule-provider",
-            3,                          // open after 3 failures
-            Duration.ofSeconds(30)      // stay open for 30 seconds
-        );
-        this.retry = new RetryWithBackoff(
-            3,
-            Duration.ofMillis(100),
-            Duration.ofSeconds(2)
-        );
+
+        CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
+            .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+            .slidingWindowSize(3)
+            .minimumNumberOfCalls(3)
+            .failureRateThreshold(100f)          // open when all 3 calls in window fail
+            .waitDurationInOpenState(Duration.ofSeconds(30))
+            .permittedNumberOfCallsInHalfOpenState(1)
+            .build();
+        this.circuitBreaker = CircuitBreakerRegistry.of(cbConfig)
+            .circuitBreaker("jurisdiction-rule-provider");
+
+        RetryConfig retryConfig = RetryConfig.custom()
+            .maxAttempts(3)
+            .intervalFunction(attempt -> {
+                long exponential = (long) (100 * Math.pow(2, attempt));
+                long capped = Math.min(exponential, 2000L);
+                double jitter = 0.5 + Math.random() * 0.5;
+                return (long) (capped * jitter);
+            })
+            .build();
+        this.retry = RetryRegistry.of(retryConfig).retry("jurisdiction-rule-provider");
         // Named thread pool for observability
         this.executorService = Executors.newFixedThreadPool(
             Runtime.getRuntime().availableProcessors(),
@@ -184,17 +201,16 @@ public class TaxCalculationEngine {
      */
     private List<TaxRule> fetchRulesWithResilience(String jurisdictionCode) {
         try {
-            return circuitBreaker.execute(() -> {
+            return circuitBreaker.executeSupplier(() -> {
                 try {
-                    return retry.execute(
-                        "fetch-rules-" + jurisdictionCode,
+                    return retry.executeCallable(
                         () -> ruleProvider.getRulesForJurisdiction(jurisdictionCode)
                     );
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
             });
-        } catch (CircuitBreaker.CircuitBreakerOpenException e) {
+        } catch (CallNotPermittedException e) {
             log.warning("Circuit breaker open for jurisdiction: " + jurisdictionCode + " — using empty rules");
             return Collections.emptyList();
         }

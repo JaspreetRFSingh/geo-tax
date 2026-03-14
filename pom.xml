@@ -38,6 +38,18 @@
             <version>2.0.9</version>
             <optional>true</optional>
         </dependency>
+
+        <!-- Resilience4j — Circuit Breaker + Retry -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+            <version>2.2.0</version>
+        </dependency>
     </dependencies>
 
     <build>
