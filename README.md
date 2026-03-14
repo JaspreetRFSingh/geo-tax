@@ -278,9 +278,7 @@ This is how you test race conditions. Without this synchronization, threads star
 
 ---
 
-## What to Tell the Interviewer
-
-When asked about this project, I highlight these talking points that map directly to the JD:
+## Key Conceptual Areas
 
 **On distributed systems:**
 > "The engine handles multi-jurisdiction lookups in parallel using CompletableFuture with a dedicated thread pool. I wrapped the provider calls in a Circuit Breaker — if the rule store goes down, the engine fast-fails instead of creating thread pile-up, and recovers automatically when the dependency comes back."
@@ -296,7 +294,7 @@ When asked about this project, I highlight these talking points that map directl
 
 ---
 
-## Suggested Extensions (show initiative)
+## Suggested Extensions (Pull Requests are welcome!)
 
 1. **Redis caching layer** — Implement `RedisJurisdictionRuleProvider` using Jedis or Lettuce. Add TTL-based cache invalidation with a pub/sub invalidation message when rules change.
 
