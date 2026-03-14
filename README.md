@@ -1,6 +1,6 @@
 # GeoTax — Multi-Jurisdiction Tax Calculation Engine
 
-A distributed, multi-jurisdiction tax calculation microservice in Java that mirrors what Uber's tax platform likely does at its core.
+A distributed, multi-jurisdiction tax calculation microservice in Java that mirrors what a large-scale mobility platform's tax system would do at its core.
 
 - **Correct**: Uses `BigDecimal` for precise financial calculations and adheres to India's GST rules.
 - **Scalable**: Handles many rides per minute with low latency.
@@ -56,7 +56,7 @@ CircuitBreaker → RetryWithBackoff → JurisdictionRuleProvider
 
 `TaxRule` is fully immutable — all fields are `final`, no setters exist, and collections (like lists passed in) are defensively copied.
 
-**Why it matters at Uber's scale:**
+**Why it matters at large scale:**
 When 50,000+ rides/minute each need to look up the same tax rules, those objects are read concurrently by hundreds of threads. An immutable object requires zero synchronization — any thread can read it safely, simultaneously.
 
 ```java
@@ -212,7 +212,7 @@ A dedicated `ExecutorService` with a fixed thread pool gives you:
 
 **File:** `TaxCalculationService.java`
 
-**The scenario:** The Rides service sends a tax calculation request. The Tax service computes it and sends the response. The response gets lost in a network partition. The Rides service retries. Without idempotency, the ride gets a second, duplicate tax event inserted into the audit log — a compliance nightmare.
+**The scenario:** A rides service sends a tax calculation request. The Tax service computes it and sends the response. The response gets lost in a network partition. The rides service retries. Without idempotency, the ride gets a second, duplicate tax event inserted into the audit log — a compliance nightmare.
 
 **Solution:** Use `transactionId` as an idempotency key.
 
@@ -221,7 +221,7 @@ Request 1 (txnId="TXN-123") → compute → cache → return result
 Request 2 (txnId="TXN-123") → cache hit → return SAME result (no recompute)
 ```
 
-**Production note:** The `ConcurrentHashMap` cache here is in-process and ephemeral. In production (like Uber), you'd use Redis with a TTL:
+**Production note:** The `ConcurrentHashMap` cache here is in-process and ephemeral. In production, you'd use Redis with a TTL:
 ```
 SETEX idempotency:TXN-123 3600 <serialized_result>
 ```
@@ -233,13 +233,13 @@ This survives service restarts and works across multiple service instances.
 
 **File:** `TaxCalculationResult.java`
 
-Tax authorities can audit Uber years after a transaction. Every result includes:
+Tax authorities can audit a platform years after a transaction. Every result includes:
 
 ```java
 List<String> appliedRuleIds = ["IN-TS-GST-STD-001@v3", "IN-TS-CESS-001@v1"]
 ```
 
-The `@v3` suffix is the rule's **version number**. If Uber changes the GST rate from 5% to 6% in Q2, the old rule (v3) is kept in history. You can always replay `IN-TS-GST-STD-001@v3` to get exactly what was charged on a ride in January, even if the current version is v5.
+The `@v3` suffix is the rule's **version number**. If a provider changes the GST rate from 5% to 6% in Q2, the old rule (v3) is kept in history. You can always replay `IN-TS-GST-STD-001@v3` to get exactly what was charged on a ride in January, even if the current version is v5.
 
 This is the **Event Sourcing** pattern applied to tax rules — never delete history, only append new versions.
 
@@ -258,7 +258,7 @@ Both are thread-safe counters. The difference:
 - **AtomicLong**: single memory location, all threads CAS the same cell → contention under high concurrency
 - **LongAdder**: maintains multiple "cells" per CPU, each thread updates its own cell → near-zero contention. `sum()` adds all cells on read.
 
-At Uber's scale (millions of requests), `LongAdder` outperforms `AtomicLong` significantly for counters that are written more than read. Java 8+ recommendation from Doug Lea, author of `java.util.concurrent`.
+At large scale (millions of requests), `LongAdder` outperforms `AtomicLong` significantly for counters that are written more than read. Java 8+ recommendation from Doug Lea, author of `java.util.concurrent`.
 
 ---
 
@@ -302,7 +302,7 @@ This is how you test race conditions. Without this synchronization, threads star
 
 3. **Graceful degradation** — If the rule provider is down, fall back to the last successfully cached rules rather than zero-tax. Add a `staleRuleAcceptancePolicy` config.
 
-4. **gRPC endpoint** — Replace the HTTP API with gRPC for lower latency between internal services. This is standard practice at Uber.
+4. **gRPC endpoint** — Replace the HTTP API with gRPC for lower latency between internal services. This is standard practice at large companies.
 
 5. **Rule versioning with effective dates** — Add an admin API to "publish" a new rule version effective on a future date. The engine automatically picks up the new version at the right time.
 
