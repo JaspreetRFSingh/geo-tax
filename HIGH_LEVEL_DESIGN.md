@@ -16,31 +16,32 @@ Ride-hailing transactions (like Uber) cross multiple tax jurisdictions with diff
 
 ```mermaid
 flowchart TD
-    Client(["Client / Batch Processor"])
+    Client(["Client"])
 
     subgraph Service Layer
-        SVC["TaxCalculationService\n─────────────────\n• Idempotency cache\n  (transactionId → result)\n• Metrics (LongAdder)\n• Batch parallelStream()"]
+        SVC["TaxCalculationService
+        Idempotency cache (transactionId → result) \n Metrics (LongAdder) \nBatch parallelStream()"]
     end
 
     subgraph Engine Layer
-        ENG["TaxCalculationEngine\n─────────────────\n• Identifies jurisdictions\n• Parallel rule fetch\n  (CompletableFuture)\n• Rule filtering\n  (date + rideType)\n• BigDecimal computation\n• Audit trail builder"]
+        ENG["TaxCalculationEngine \nIdentifies jurisdictions, Parallel rule fetch, (CompletableFuture)\nRule filtering\nAudit trail builder"]
     end
 
     subgraph Resilience Layer
-        CB["CircuitBreaker\n─────────────\nCLOSED → OPEN\n→ HALF_OPEN\n(lock-free Atomics)"]
-        RB["RetryWithBackoff\n──────────────────\nExp. backoff + jitter\nMax 3 attempts"]
+        CB["CircuitBreaker\nCLOSED → OPEN → HALF_OPEN\n(lock-free Atomics)"]
+        RB["RetryWithBackoff\nExp. backoff + jitter (Max 3 attempts)"]
     end
 
     subgraph Provider Layer
-        IFACE["«interface»\nJurisdictionRuleProvider\n─────────────────────"]
-        INMEM["InMemoryRuleProvider\n──────────────────────\nIN-TS · IN-MH · IN-KA\nUS-CA (demo)"]
+        IFACE["«interface»\nJurisdictionRuleProvider\n"]
+        INMEM["InMemoryRuleProvider\nIN-TS · IN-MH · IN-KA\nUS-CA (demo)"]
         REDIS(["RedisRuleProvider\n(extension point)"])
         DB(["DBRuleProvider\n(extension point)"])
     end
 
     subgraph Data Models
-        REQ["TaxCalculationRequest\n──────────────────\ntransactionId · rideId\nbaseFare · rideType\norigin/destination\njurisdictions · timestamp"]
-        RULE["TaxRule (immutable)\n──────────────\nruleId · version\njurisdictionCode\ntaxType · rate\neffectiveFrom/To\napplicableRideType"]
+        REQ["TaxCalculationRequest\nbaseFare · rideType\norigin/destination\njurisdictions · timestamp"]
+        RULE["TaxRule (immutable)\nruleId · version\njurisdictionCode\ntaxType · rateeffectiveFrom/To\napplicableRideType"]
         RES["TaxCalculationResult\n───────────────────\nlineItems[]\ntotalTaxAmount\nappliedRuleIds@version\nfromCache flag"]
     end
 
